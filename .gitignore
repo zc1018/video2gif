@@ -1,0 +1,10 @@
+node_modules/
+dist/
+server/uploads/
+server/output/
+*.log
+.DS_Store
+*.pem
+*.zip
+prompt-manager.conf
+AWS部署指南.md
