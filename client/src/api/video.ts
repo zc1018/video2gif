@@ -20,14 +20,21 @@ export async function uploadVideo(file: File, onProgress?: (p: number) => void):
         resolve(JSON.parse(xhr.responseText));
       } else {
         try {
-          reject(new Error(JSON.parse(xhr.responseText).error || '上传失败'));
+          const response = JSON.parse(xhr.responseText);
+          const serverError = response.error || '上传失败，请稍后重试';
+          // 服务器错误统一提示
+          if (xhr.status >= 500) {
+            reject(new Error('服务繁忙，请稍后重试'));
+          } else {
+            reject(new Error(serverError));
+          }
         } catch {
-          reject(new Error('上传失败'));
+          reject(new Error(xhr.status >= 500 ? '服务繁忙，请稍后重试' : '上传失败，请检查文件后重试'));
         }
       }
     };
 
-    xhr.onerror = () => reject(new Error('网络错误'));
+    xhr.onerror = () => reject(new Error('网络异常，请检查网络连接后重试'));
     xhr.open('POST', `${BASE}/upload`);
     xhr.send(form);
   });
@@ -94,7 +101,17 @@ export function watchProgress(
       onDone(data.outputId);
       es.close();
     } else if (data.stage === 'error' || data.progress === -1) {
-      onError(data.error || '转换失败');
+      const errorMsg = data.error || '转换失败';
+      // 优化错误提示
+      let userFriendlyError = '视频处理失败，请尝试降低分辨率或帧率后重试';
+      if (errorMsg.includes('codec') || errorMsg.includes('编码')) {
+        userFriendlyError = '视频编码格式不兼容，请尝试转换为 MP4 格式后重试';
+      } else if (errorMsg.includes('memory') || errorMsg.includes('内存')) {
+        userFriendlyError = '视频过大，建议缩短时长或降低分辨率后重试';
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('超时')) {
+        userFriendlyError = '处理超时，建议缩短视频时长后重试';
+      }
+      onError(userFriendlyError);
       es.close();
     } else {
       onProgress(data.progress, data.stage);
@@ -102,7 +119,7 @@ export function watchProgress(
   };
 
   es.onerror = () => {
-    onError('连接中断');
+    onError('连接中断，请检查网络后刷新页面重试');
     es.close();
   };
 

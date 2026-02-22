@@ -15,12 +15,17 @@ const tasks = new Map<string, { progress: number; stage: string; outputId?: stri
 router.post('/upload', upload.single('video'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ error: '未收到文件' });
+      res.status(400).json({ error: '未收到文件，请重新选择视频上传' });
       return;
     }
     const id = path.basename(req.file.filename, path.extname(req.file.filename));
     res.json({ id, filename: req.file.originalname });
   } catch (err: any) {
+    // 文件过大错误处理
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({ error: '文件过大，建议压缩视频或缩短时长后重试' });
+      return;
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -30,13 +35,14 @@ router.get('/metadata/:id', async (req: Request, res: Response) => {
   try {
     const filePath = getUploadPath(req.params.id);
     if (!filePath) {
-      res.status(404).json({ error: '文件不存在' });
+      res.status(404).json({ error: '视频文件已过期或不存在，请重新上传' });
       return;
     }
     const meta = await getMetadata(filePath);
     res.json(meta);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    // 元数据读取失败，可能是格式不兼容
+    res.status(500).json({ error: '视频处理失败，可能是编码格式不兼容，请尝试其他视频' });
   }
 });
 
@@ -59,7 +65,7 @@ router.post('/convert', async (req: Request, res: Response) => {
     const { id, resolution, fps, startTime, endTime, crop } = req.body;
     const filePath = getUploadPath(id);
     if (!filePath) {
-      res.status(404).json({ error: '文件不存在' });
+      res.status(404).json({ error: '视频文件已过期或不存在，请重新上传' });
       return;
     }
 
@@ -78,10 +84,12 @@ router.post('/convert', async (req: Request, res: Response) => {
     ).then(() => {
       tasks.set(taskId, { progress: 100, stage: 'done', outputId });
     }).catch((err) => {
-      tasks.set(taskId, { progress: -1, stage: 'error', error: err.message });
+      // 转换失败，提供友好的错误信息
+      const errorMessage = '视频处理失败，可能是编码格式不兼容，请尝试其他视频';
+      tasks.set(taskId, { progress: -1, stage: 'error', error: errorMessage });
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务繁忙，请稍后重试' });
   }
 });
 
@@ -101,7 +109,7 @@ router.get('/progress/:taskId', (req: Request, res: Response) => {
   const interval = setInterval(() => {
     const task = tasks.get(taskId);
     if (!task) {
-      send({ progress: -1, stage: 'error', error: '任务不存在' });
+      send({ progress: -1, stage: 'error', error: '任务已过期，请重新上传视频' });
       clearInterval(interval);
       res.end();
       return;
@@ -125,7 +133,7 @@ router.get('/progress/:taskId', (req: Request, res: Response) => {
 router.get('/download/:outputId', (req: Request, res: Response) => {
   const outputPath = getOutputPath(req.params.outputId);
   if (!outputPath) {
-    res.status(404).json({ error: 'GIF 文件不存在' });
+    res.status(404).json({ error: 'GIF 文件已过期或不存在，请重新转换' });
     return;
   }
   res.download(outputPath, 'output.gif', (err) => {

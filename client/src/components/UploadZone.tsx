@@ -6,6 +6,7 @@ interface Props {
 }
 
 const ACCEPT = '.mp4,.avi,.mov,.mkv,.webm,.flv,.mpeg,.mpg,.wmv,.3gp';
+const MAX_SIZE = 500 * 1024 * 1024; // 500MB
 
 export default function UploadZone({ onUploaded }: Props) {
   const [dragging, setDragging] = useState(false);
@@ -15,6 +16,12 @@ export default function UploadZone({ onUploaded }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
+    // 文件大小检查
+    if (file.size > MAX_SIZE) {
+      setError('文件过大，建议压缩视频或缩短时长后重试');
+      return;
+    }
+
     setError('');
     setUploading(true);
     setProgress(0);
@@ -51,14 +58,19 @@ export default function UploadZone({ onUploaded }: Props) {
         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
       />
       <div className="icon">🎬</div>
-      <h2>{uploading ? `上传中 ${progress}%` : '拖拽视频到这里，或点击选择'}</h2>
-      <p>支持 MP4、AVI、MOV、MKV、WebM、FLV 等格式，最大 500MB</p>
+      <h2>{uploading ? `上传中 ${progress}%` : '免费视频转 GIF，实时预览文件大小'}</h2>
+      <p>精准控制每一帧 | 实时预估文件大小 | 支持 MP4/MOV/AVI 等格式</p>
       {uploading && (
         <div className="upload-progress">
           <div className="upload-progress-bar" style={{ width: `${progress}%` }} />
         </div>
       )}
-      {error && <p style={{ color: 'var(--danger)', marginTop: 12 }}>{error}</p>}
+      {error && (
+        <div className="upload-error">
+          <span className="upload-error-icon">⚠️</span>
+          <span className="upload-error-text">{error}</span>
+        </div>
+      )}
     </div>
   );
 }

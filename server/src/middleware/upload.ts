@@ -26,7 +26,7 @@ export const upload = multer({
     if (ALLOWED_MIMES.includes(file.mimetype) || ALLOWED_EXTS.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error(`不支持的文件格式: ${ext}`));
+      cb(new Error('暂不支持此视频格式，建议转换为 MP4 格式后重试'));
     }
   }
 });
